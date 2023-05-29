@@ -396,6 +396,22 @@ cmd_kheapstats(int nargs, char **args)
 	return 0;
 }
 
+/*
+ * Command to enable the output of debugging messages
+ * of type DB_THREADS.
+ */
+static
+int
+cmd_dth(int nargs, char **args)
+{
+	(void)nargs;
+	(void)args;
+
+	dbflags |= DB_THREADS;
+
+	return 0;
+}
+
 ////////////////////////////////////////
 //
 // Menus.
@@ -589,6 +605,8 @@ static struct {
 	{ "fs3",	writestress },
 	{ "fs4",	writestress2 },
 	{ "fs5",	createstress },
+
+	{ "dth", 	cmd_dth	},
 
 	{ NULL, NULL }
 };
