@@ -21,7 +21,12 @@
 /*
  * replace this with declarations of any synchronization and other variables you need here
  */
-static struct semaphore *intersectionSem;
+// static struct semaphore *intersectionSem;
+static struct lock * traffic_lock;
+static struct cv * traffic_cv[4];
+static int cars_at_intersection = 0;
+static int waiting_cars[4] = {0};
+static Direction safe_to_go;
 
 
 /* 
@@ -35,10 +40,19 @@ void
 intersection_sync_init(void)
 {
   /* replace this default implementation with your own implementation */
-
+  /*
   intersectionSem = sem_create("intersectionSem",1);
   if (intersectionSem == NULL) {
     panic("could not create intersection semaphore");
+  }
+  return;
+  */
+  traffic_lock = lock_create("traffic_lock");
+  for (int i = 0; i < 4; i++) {
+    traffic_cv[i] = cv_create("cv_"+i);
+  }
+  if (traffic_lock == NULL) {
+    panic("Traffic Lock creation failure");
   }
   return;
 }
@@ -54,8 +68,16 @@ void
 intersection_sync_cleanup(void)
 {
   /* replace this default implementation with your own implementation */
+  /*
   KASSERT(intersectionSem != NULL);
   sem_destroy(intersectionSem);
+  */
+  KASSERT(traffic_lock != NULL);
+  for (int i = 0; i < 4; i++) {
+    cv_destroy(traffic_cv[i]);
+  }
+  lock_destroy(traffic_lock);
+  return;
 }
 
 
@@ -76,10 +98,21 @@ void
 intersection_before_entry(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
+  // (void)origin;  /* avoid compiler complaint about unused parameter */
   (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  P(intersectionSem);
+  // KASSERT(intersectionSem != NULL);
+  // P(intersectionSem);
+  lock_acquire(traffic_lock);
+  waiting_cars[origin]++;
+  if (cars_at_intersection == 0) {
+    safe_to_go = origin;
+  }
+  while (safe_to_go != origin) {
+    cv_wait(traffic_cv[origin], traffic_lock);
+  }
+  cars_at_intersection++;
+  lock_release(traffic_lock);
+  return;
 }
 
 
@@ -98,8 +131,22 @@ void
 intersection_after_exit(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
+  // (void)origin;  /* avoid compiler complaint about unused parameter */
   (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  V(intersectionSem);
+  // KASSERT(intersectionSem != NULL);
+  // V(intersectionSem);
+  lock_acquire(traffic_lock);
+  waiting_cars[origin]--;
+  int max = 0;
+  if (--cars_at_intersection == 0) {
+    for (unsigned int i = 0; i < 4; i++) {
+      if (waiting_cars[i] > waiting_cars[max]) {
+        max = i;
+      }
+    }
+    cv_broadcast(traffic_cv[max], traffic_lock);
+    safe_to_go = max;
+  }
+  lock_release(traffic_lock);
+  return;
 }
